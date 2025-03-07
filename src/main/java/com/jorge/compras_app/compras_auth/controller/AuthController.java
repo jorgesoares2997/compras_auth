@@ -11,6 +11,7 @@ import com.jorge.compras_app.compras_auth.service.UserService;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
