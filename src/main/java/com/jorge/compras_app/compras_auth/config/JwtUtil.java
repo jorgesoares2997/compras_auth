@@ -2,6 +2,7 @@ package com.jorge.compras_app.compras_auth.config;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.Claims;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
@@ -10,13 +11,13 @@ import javax.crypto.SecretKey;
 
 @Component
 public class JwtUtil {
-    private final String SECRET_KEY = "sua-chave-secreta-super-segura-de-pelo-menos-32-caracteres"; // Deve ter 32+
-                                                                                                    // caracteres para
-                                                                                                    // HS512
+    private final String SECRET_KEY = "qfXsYBVwgOFRtpTQvQL/1xJ5S77NwB9VJnO9zKVjTUZckctXl2o+8c5YMXPYAIop\n" + //
+            "cm2823Np5r+nUljsCPvwzw==";
     private final long EXPIRATION_TIME = 1000 * 60 * 60 * 10; // 10 horas
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+        byte[] keyBytes = SECRET_KEY.getBytes(StandardCharsets.UTF_8);
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(String email) {
@@ -29,22 +30,23 @@ public class JwtUtil {
     }
 
     public String extractEmail(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
+        Claims claims = Jwts.parser()
+                .setSigningKey(getSigningKey()) // Corrigido
                 .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
+                .parseClaimsJws(token)
+                .getBody();
+        return claims.getSubject();
     }
 
     public boolean validateToken(String token) {
         try {
             Jwts.parser()
-                    .verifyWith(getSigningKey())
+                    .setSigningKey(getSigningKey()) // Corrigido
                     .build()
-                    .parseSignedClaims(token);
+                    .parseClaimsJws(token);
             return true;
         } catch (Exception e) {
+            System.out.println("Erro ao validar token: " + e.getMessage());
             return false;
         }
     }
