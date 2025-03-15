@@ -1,13 +1,21 @@
 package com.jorge.compras_app.compras_auth.controller;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtParserBuilder;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SigningKeyResolver;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import com.jorge.compras_app.compras_auth.config.JwtUtil;
-
 import com.jorge.compras_app.compras_auth.model.User;
 import com.jorge.compras_app.compras_auth.service.UserService;
+
+import java.security.PublicKey;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -20,6 +28,9 @@ public class AuthController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    // Endpoint de registro existente
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody User user) {
         System.out.println("Registrando usuário: " + user.getEmail());
@@ -32,6 +43,7 @@ public class AuthController {
         }
     }
 
+    // Endpoint de login existente
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody User user) {
         System.out.println("Tentativa de login com email: " + user.getEmail());
@@ -42,5 +54,183 @@ public class AuthController {
         }
         System.out.println("Credenciais inválidas para: " + user.getEmail());
         return ResponseEntity.status(401).body("Credenciais inválidas");
+    }
+
+    // Endpoint para login com Google (usando tokeninfo API)
+    @PostMapping("/google-login")
+    public ResponseEntity<String> loginWithGoogle(@RequestBody GoogleLoginRequest request) {
+        System.out.println("Tentativa de login com Google: " + request.getAccessToken());
+        try {
+            // Validar o access_token com a API do Google
+            String tokenInfoUrl = "https://oauth2.googleapis.com/tokeninfo?access_token=" + request.getAccessToken();
+            GoogleTokenResponse tokenResponse = restTemplate.getForObject(tokenInfoUrl, GoogleTokenResponse.class);
+
+            if (tokenResponse == null || tokenResponse.getError() != null) {
+                System.out.println("Token do Google inválido: "
+                        + (tokenResponse != null ? tokenResponse.getError() : "Resposta nula"));
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Google token");
+            }
+
+            // Verificar se o token pertence ao seu app (audience)
+            if (!"911266742263-jm27q7p4v862mdic2p7ntacmpocutat8.apps.googleusercontent.com"
+                    .equals(tokenResponse.getAudience())) { // Substitua pelo seu Client ID
+                System.out.println("Audience inválida: " + tokenResponse.getAudience());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid audience");
+            }
+
+            String email = tokenResponse.getEmail();
+            String name = tokenResponse.getName();
+
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                user = userService.saveGoogleUser(email, name);
+                System.out.println("Novo usuário Google registrado: " + email);
+            }
+
+            String token = jwtUtil.generateToken(email);
+            System.out.println("Token gerado para Google login: " + token);
+            return ResponseEntity.ok("{\"token\": \"" + token + "\"}");
+        } catch (Exception e) {
+            System.out.println("Erro no login com Google: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
+    }
+
+    // Endpoint para login com Apple
+    @PostMapping("/apple-login")
+    public ResponseEntity<String> loginWithApple(@RequestBody AppleLoginRequest request) {
+        System.out.println("Tentativa de login com Apple: " + request.getIdentityToken());
+        try {
+            JwtParserBuilder parserBuilder = Jwts.parser();
+            parserBuilder.setSigningKeyResolver(new AppleSigningKeyResolver());
+            Jws<Claims> jwt = parserBuilder.build().parseClaimsJws(request.getIdentityToken());
+
+            Claims claims = jwt.getBody();
+            String email = claims.get("email", String.class);
+            String appleId = claims.getSubject();
+
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                user = userService.saveAppleUser(email, appleId);
+                System.out.println("Novo usuário Apple registrado: " + email);
+            }
+
+            String token = jwtUtil.generateToken(email);
+            System.out.println("Token gerado para Apple login: " + token);
+            return ResponseEntity.ok("{\"token\": \"" + token + "\"}");
+        } catch (Exception e) {
+            System.out.println("Erro no login com Apple: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
+    }
+}
+
+// Classe para request do Google
+class GoogleLoginRequest {
+    private String accessToken;
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+}
+
+// Classe para request da Apple
+class AppleLoginRequest {
+    private String identityToken;
+
+    public String getIdentityToken() {
+        return identityToken;
+    }
+
+    public void setIdentityToken(String identityToken) {
+        this.identityToken = identityToken;
+    }
+}
+
+// Classe para mapear a resposta da API tokeninfo do Google
+class GoogleTokenResponse {
+    private String audience;
+    private String email;
+    private String name;
+    private String error;
+
+    public String getAudience() {
+        return audience;
+    }
+
+    public void setAudience(String audience) {
+        this.audience = audience;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getError() {
+        return error;
+    }
+
+    public void setError(String error) {
+        this.error = error;
+    }
+}
+
+// Resolver para chave pública da Apple
+class AppleSigningKeyResolver implements SigningKeyResolver {
+    private final org.apache.http.client.HttpClient httpClient = org.apache.http.impl.client.HttpClients
+            .createDefault();
+
+    @Override
+    public PublicKey resolveSigningKey(io.jsonwebtoken.JwsHeader header, Claims claims) {
+        try {
+            String kid = header.getKeyId();
+            org.apache.http.client.methods.HttpGet request = new org.apache.http.client.methods.HttpGet(
+                    "https://appleid.apple.com/auth/keys");
+            org.apache.http.HttpResponse response = httpClient.execute(request);
+            String jsonResponse = org.apache.http.util.EntityUtils.toString(response.getEntity());
+
+            org.json.JSONObject keys = new org.json.JSONObject(jsonResponse);
+            org.json.JSONArray keyArray = keys.getJSONArray("keys");
+            for (int i = 0; i < keyArray.length(); i++) {
+                org.json.JSONObject key = keyArray.getJSONObject(i);
+                if (kid.equals(key.getString("kid"))) {
+                    String n = key.getString("n");
+                    String e = key.getString("e");
+                    return generatePublicKey(n, e);
+                }
+            }
+            throw new RuntimeException("Apple key not found");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to resolve Apple signing key", e);
+        }
+    }
+
+    @Override
+    public PublicKey resolveSigningKey(io.jsonwebtoken.JwsHeader header, byte[] content) {
+        throw new UnsupportedOperationException("Apple Signing Key Resolver does not support raw content signing keys");
+    }
+
+    private PublicKey generatePublicKey(String modulus, String exponent) throws Exception {
+        java.math.BigInteger n = new java.math.BigInteger(1, java.util.Base64.getUrlDecoder().decode(modulus));
+        java.math.BigInteger e = new java.math.BigInteger(1, java.util.Base64.getUrlDecoder().decode(exponent));
+        java.security.spec.RSAPublicKeySpec spec = new java.security.spec.RSAPublicKeySpec(n, e);
+        java.security.KeyFactory factory = java.security.KeyFactory.getInstance("RSA");
+        return factory.generatePublic(spec);
     }
 }
