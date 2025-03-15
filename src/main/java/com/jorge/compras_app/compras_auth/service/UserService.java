@@ -25,8 +25,47 @@ public class UserService implements UserDetailsService {
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             throw new IllegalArgumentException("Email já está em uso");
         }
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        if (user.getPassword() != null) { // Só codifica se a senha for fornecida
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+        }
         user.setCreatedAt(LocalDateTime.now());
+        return userRepository.save(user);
+    }
+
+    public User findByEmail(String email) {
+        return userRepository.findByEmail(email).orElse(null);
+    }
+
+    public User saveGoogleUser(String email, String name) {
+        User existingUser = findByEmail(email);
+        if (existingUser != null) {
+            existingUser.setLastLogin(LocalDateTime.now());
+            return userRepository.save(existingUser);
+        }
+
+        User user = new User();
+        user.setEmail(email);
+        user.setName(name);
+        user.setPassword(null); // Sem senha para usuários Google
+        user.setCreatedAt(LocalDateTime.now());
+        System.out.println("Registrando novo usuário Google: " + email);
+        return userRepository.save(user);
+    }
+
+    public User saveAppleUser(String email, String appleId) {
+        User existingUser = findByEmail(email);
+        if (existingUser != null) {
+            existingUser.setLastLogin(LocalDateTime.now());
+            return userRepository.save(existingUser);
+        }
+
+        User user = new User();
+        user.setEmail(email);
+        user.setName("Apple User");
+        user.setPassword(null); // Sem senha para usuários Apple
+        user.setAppleId(appleId); // Armazena o ID único da Apple
+        user.setCreatedAt(LocalDateTime.now());
+        System.out.println("Registrando novo usuário Apple: " + email);
         return userRepository.save(user);
     }
 
@@ -34,9 +73,10 @@ public class UserService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        String password = user.getPassword() != null ? user.getPassword() : ""; // Senha vazia se null
         return org.springframework.security.core.userdetails.User
                 .withUsername(user.getEmail())
-                .password(user.getPassword())
+                .password(password)
                 .roles("USER")
                 .build();
     }
@@ -46,6 +86,10 @@ public class UserService implements UserDetailsService {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             System.out.println("Usuário não encontrado para: " + email);
+            return false;
+        }
+        if (user.getPassword() == null) { // Usuários Google/Apple não têm senha
+            System.out.println("Usuário sem senha registrada: " + email);
             return false;
         }
         boolean isValid = passwordEncoder.matches(password, user.getPassword());

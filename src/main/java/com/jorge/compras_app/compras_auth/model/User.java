@@ -1,7 +1,5 @@
 package com.jorge.compras_app.compras_auth.model;
 
-
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -18,12 +16,16 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true)
+    @Column(unique = true, nullable = false)
     private String email;
 
+    @Column(nullable = true) // Permitir null para usuários de Google e Apple
     private String password;
 
     private String name;
+
+    @Column(name = "apple_id", unique = true) // Campo opcional para ID da Apple
+    private String appleId;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
