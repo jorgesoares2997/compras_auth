@@ -11,6 +11,7 @@ import com.jorge.compras_app.compras_auth.model.User;
 import com.jorge.compras_app.compras_auth.repository.UserRepository;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -100,5 +101,22 @@ public class UserService implements UserDetailsService {
             userRepository.save(user);
         }
         return isValid;
+    }
+
+    // UserService.java (exemplo)
+    public User saveLinkedInUser(String email, String name) {
+        User user = new User();
+        user.setEmail(email);
+        user.setName(name);
+        user.setPassword("linkedin-auth-" + UUID.randomUUID().toString()); // Senha dummy
+        return userRepository.save(user);
+    }
+
+    public User saveGitHubUser(String email, String name) {
+        User user = new User();
+        user.setEmail(email);
+        user.setName(name);
+        user.setPassword("github-auth-" + UUID.randomUUID().toString()); // Senha dummy
+        return userRepository.save(user);
     }
 }

@@ -56,12 +56,11 @@ public class AuthController {
         return ResponseEntity.status(401).body("Credenciais inválidas");
     }
 
-    // Endpoint para login com Google (usando tokeninfo API)
+    // Login com Google (já existente)
     @PostMapping("/google-login")
     public ResponseEntity<String> loginWithGoogle(@RequestBody GoogleLoginRequest request) {
         System.out.println("Tentativa de login com Google: " + request.getAccessToken());
         try {
-            // Validar o access_token com a API do Google
             String tokenInfoUrl = "https://oauth2.googleapis.com/tokeninfo?access_token=" + request.getAccessToken();
             GoogleTokenResponse tokenResponse = restTemplate.getForObject(tokenInfoUrl, GoogleTokenResponse.class);
 
@@ -71,9 +70,8 @@ public class AuthController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Google token");
             }
 
-            // Verificar se o token pertence ao seu app (audience)
             if (!"911266742263-jm27q7p4v862mdic2p7ntacmpocutat8.apps.googleusercontent.com"
-                    .equals(tokenResponse.getAudience())) { // Substitua pelo seu Client ID
+                    .equals(tokenResponse.getAudience())) {
                 System.out.println("Audience inválida: " + tokenResponse.getAudience());
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid audience");
             }
@@ -96,7 +94,7 @@ public class AuthController {
         }
     }
 
-    // Endpoint para login com Apple
+    // Login com Apple (já existente)
     @PostMapping("/apple-login")
     public ResponseEntity<String> loginWithApple(@RequestBody AppleLoginRequest request) {
         System.out.println("Tentativa de login com Apple: " + request.getIdentityToken());
@@ -123,9 +121,82 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
         }
     }
+
+    // Login com LinkedIn
+    @PostMapping("/linkedin-login")
+    public ResponseEntity<String> loginWithLinkedIn(@RequestBody LinkedInLoginRequest request) {
+        System.out.println("Tentativa de login com LinkedIn: " + request.getAccessToken());
+        try {
+            // Validar o token com a API do LinkedIn
+            String userInfoUrl = "https://api.linkedin.com/v2/userinfo";
+            LinkedInUserResponse userResponse = restTemplate.getForObject(
+                    userInfoUrl + "?oauth2_access_token=" + request.getAccessToken(),
+                    LinkedInUserResponse.class);
+
+            if (userResponse == null || userResponse.getEmail() == null) {
+                System.out.println("Token do LinkedIn inválido ou resposta nula");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid LinkedIn token");
+            }
+
+            String email = userResponse.getEmail();
+            String name = userResponse.getName();
+
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                user = userService.saveLinkedInUser(email, name);
+                System.out.println("Novo usuário LinkedIn registrado: " + email);
+            }
+
+            String token = jwtUtil.generateToken(email);
+            System.out.println("Token gerado para LinkedIn login: " + token);
+            return ResponseEntity.ok("{\"token\": \"" + token + "\"}");
+        } catch (Exception e) {
+            System.out.println("Erro no login com LinkedIn: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
+    }
+
+    // Login com GitHub
+    @PostMapping("/github-login")
+    public ResponseEntity<String> loginWithGitHub(@RequestBody GitHubLoginRequest request) {
+        System.out.println("Tentativa de login com GitHub: " + request.getAccessToken());
+        try {
+            // Validar o token com a API do GitHub
+            String userInfoUrl = "https://api.github.com/user";
+            GitHubUserResponse userResponse = restTemplate.getForObject(
+                    userInfoUrl,
+                    GitHubUserResponse.class,
+                    new java.util.HashMap<String, String>() {
+                        {
+                            put("Authorization", "Bearer " + request.getAccessToken());
+                        }
+                    });
+
+            if (userResponse == null || userResponse.getEmail() == null) {
+                System.out.println("Token do GitHub inválido ou resposta nula");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid GitHub token");
+            }
+
+            String email = userResponse.getEmail();
+            String name = userResponse.getLogin();
+
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                user = userService.saveGitHubUser(email, name);
+                System.out.println("Novo usuário GitHub registrado: " + email);
+            }
+
+            String token = jwtUtil.generateToken(email);
+            System.out.println("Token gerado para GitHub login: " + token);
+            return ResponseEntity.ok("{\"token\": \"" + token + "\"}");
+        } catch (Exception e) {
+            System.out.println("Erro no login com GitHub: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
+    }
 }
 
-// Classe para request do Google
+// Classes de Request e Response
 class GoogleLoginRequest {
     private String accessToken;
 
@@ -138,7 +209,6 @@ class GoogleLoginRequest {
     }
 }
 
-// Classe para request da Apple
 class AppleLoginRequest {
     private String identityToken;
 
@@ -151,7 +221,30 @@ class AppleLoginRequest {
     }
 }
 
-// Classe para mapear a resposta da API tokeninfo do Google
+class LinkedInLoginRequest {
+    private String accessToken;
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+}
+
+class GitHubLoginRequest {
+    private String accessToken;
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+}
+
 class GoogleTokenResponse {
     private String audience;
     private String email;
@@ -191,7 +284,48 @@ class GoogleTokenResponse {
     }
 }
 
-// Resolver para chave pública da Apple
+class LinkedInUserResponse {
+    private String email;
+    private String name;
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+
+class GitHubUserResponse {
+    private String login;
+    private String email;
+
+    public String getLogin() {
+        return login;
+    }
+
+    public void setLogin(String login) {
+        this.login = login;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+}
+
 class AppleSigningKeyResolver implements SigningKeyResolver {
     private final org.apache.http.client.HttpClient httpClient = org.apache.http.impl.client.HttpClients
             .createDefault();
