@@ -119,4 +119,9 @@ public class UserService implements UserDetailsService {
         user.setPassword("github-auth-" + UUID.randomUUID().toString()); // Senha dummy
         return userRepository.save(user);
     }
+
+    public User saveSocialUser(String email, String name, String provider) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'saveSocialUser'");
+    }
 }
