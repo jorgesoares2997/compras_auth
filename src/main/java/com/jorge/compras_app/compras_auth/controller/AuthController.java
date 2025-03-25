@@ -73,9 +73,8 @@ public class AuthController {
         String token = jwtUtil.generateToken(email);
         System.out.println("Token gerado para " + provider + " login: " + token);
 
-        // Redireciona para o frontend com o token e state
-        String redirectUrl = "http://localhost:3000/contact?token=" + token + "&state="
-                + (state != null ? state : "");
+        // Redireciona para o app Flutter com o token
+        String redirectUrl = "comprasapp://oauth/callback?token=" + token;
         return ResponseEntity.status(HttpStatus.FOUND).header("Location", redirectUrl).build();
     }
 
