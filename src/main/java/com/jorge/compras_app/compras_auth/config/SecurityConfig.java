@@ -23,7 +23,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:*")); // Defina o domínio da sua aplicação
+        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:*")); // Defina o domínio da sua aplicação
                                                                               // frontend
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
@@ -43,7 +43,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/h2-console/**").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/h2-console/**",
+                                "/api/auth/google/login", "/api/auth/google/callback",
+                                "/api/auth/github/login", "/api/auth/github/callback").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .headers(headers -> headers.frameOptions().disable());

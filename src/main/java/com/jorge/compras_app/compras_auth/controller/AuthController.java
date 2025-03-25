@@ -15,7 +15,7 @@ import com.jorge.compras_app.compras_auth.service.UserService;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = { "https://seu-site.vercel.app", "http://localhost:3000" }, allowCredentials = "true")
+@CrossOrigin(origins = { "http://localhost:3000" }, allowCredentials = "true")
 public class AuthController {
 
     @Autowired
