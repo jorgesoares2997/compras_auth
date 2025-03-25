@@ -121,7 +121,17 @@ public class UserService implements UserDetailsService {
     }
 
     public User saveSocialUser(String email, String name, String provider) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'saveSocialUser'");
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            user = new User();
+            user.setEmail(email);
+            user.setName(name);
+            user.setPassword(provider + "-auth-" + UUID.randomUUID().toString());
+            user.setProvider(provider);
+            user.setLastLogin(LocalDateTime.now());
+            return userRepository.save(user);
+        }
+        user.setLastLogin(LocalDateTime.now());
+        return userRepository.save(user);
     }
 }
