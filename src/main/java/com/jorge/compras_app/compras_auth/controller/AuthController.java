@@ -53,14 +53,9 @@ public class AuthController {
         return processCallback(authorizedClient, "linkedin", state);
     }
 
-    @PostMapping("/github/callback")
-    public ResponseEntity<?> githubCallback(@RequestBody Map<String, String> request) {
+    @GetMapping("/github/login")
+    public ResponseEntity<?> githubLogin(@RequestParam String code) {
         try {
-            String code = request.get("code");
-            if (code == null) {
-                return ResponseEntity.badRequest().body("Code is required");
-            }
-
             // Troca o código pelo token de acesso
             Map<String, Object> tokenResponse = githubService.getAccessToken(code).block();
             if (tokenResponse == null || !tokenResponse.containsKey("access_token")) {
@@ -101,9 +96,9 @@ public class AuthController {
             response.put("token", token);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.out.println("Erro no callback do GitHub: " + e.getMessage());
+            System.out.println("Erro no login do GitHub: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error processing GitHub callback: " + e.getMessage());
+                    .body("Error processing GitHub login: " + e.getMessage());
         }
     }
 
