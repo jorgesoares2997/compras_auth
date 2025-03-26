@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -37,10 +38,30 @@ public class GitHubService {
 
     public Mono<Map<String, Object>> getUserInfo(String accessToken) {
         return webClient.get()
-                .uri("https://api.github.com/user")
-                .header("Authorization", "Bearer " + accessToken)
-                .header("Accept", "application/json")
+                .uri("/user")
+                .headers(headers -> headers.setBearerAuth(accessToken))
                 .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {});
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .flatMap(userInfo -> {
+                    // Se o email não estiver no objeto principal, tenta buscar da API de emails
+                    if (userInfo.get("email") == null) {
+                        return webClient.get()
+                                .uri("/user/emails")
+                                .headers(headers -> headers.setBearerAuth(accessToken))
+                                .retrieve()
+                                .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
+                                .map(emails -> {
+                                    // Procura pelo email principal ou primeiro email verificado
+                                    for (Map<String, Object> email : emails) {
+                                        if ((Boolean) email.get("primary") || (Boolean) email.get("verified")) {
+                                            userInfo.put("email", email.get("email"));
+                                            break;
+                                        }
+                                    }
+                                    return userInfo;
+                                });
+                    }
+                    return Mono.just(userInfo);
+                });
     }
 } 
