@@ -1,6 +1,8 @@
 package com.jorge.compras_app.compras_auth.controller;
 
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import com.jorge.compras_app.compras_auth.config.JwtUtil;
 import com.jorge.compras_app.compras_auth.model.User;
 import com.jorge.compras_app.compras_auth.service.UserService;
+import com.jorge.compras_app.compras_auth.service.GitHubService;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -23,6 +26,9 @@ public class AuthController {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private GitHubService githubService;
 
     @GetMapping("/{provider}/login")
     public ResponseEntity<Void> redirectToProvider(@PathVariable String provider,
@@ -47,11 +53,58 @@ public class AuthController {
         return processCallback(authorizedClient, "linkedin", state);
     }
 
-    @GetMapping("/github/callback")
-    public ResponseEntity<Void> githubCallback(
-            @RegisteredOAuth2AuthorizedClient("github") OAuth2AuthorizedClient authorizedClient,
-            @RequestParam(required = false) String state) {
-        return processCallback(authorizedClient, "github", state);
+    @PostMapping("/github/callback")
+    public ResponseEntity<?> githubCallback(@RequestBody Map<String, String> request) {
+        try {
+            String code = request.get("code");
+            if (code == null) {
+                return ResponseEntity.badRequest().body("Code is required");
+            }
+
+            // Troca o código pelo token de acesso
+            Map<String, Object> tokenResponse = githubService.getAccessToken(code).block();
+            if (tokenResponse == null || !tokenResponse.containsKey("access_token")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Failed to get access token from GitHub");
+            }
+
+            String accessToken = (String) tokenResponse.get("access_token");
+
+            // Obtém as informações do usuário
+            Map<String, Object> userInfo = githubService.getUserInfo(accessToken).block();
+            if (userInfo == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Failed to get user info from GitHub");
+            }
+
+            String email = (String) userInfo.get("email");
+            String name = (String) userInfo.get("name");
+            if (name == null) {
+                name = (String) userInfo.get("login");
+            }
+
+            if (email == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("GitHub account must have a public email");
+            }
+
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                user = userService.saveSocialUser(email, name, "github");
+                System.out.println("Novo usuário GitHub registrado: " + email);
+            }
+
+            String token = jwtUtil.generateToken(email);
+            System.out.println("Token gerado para login GitHub: " + token);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("token", token);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.out.println("Erro no callback do GitHub: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error processing GitHub callback: " + e.getMessage());
+        }
     }
 
     @GetMapping("/apple/callback")
