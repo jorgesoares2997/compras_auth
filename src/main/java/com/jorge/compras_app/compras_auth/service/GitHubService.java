@@ -1,6 +1,7 @@
 package com.jorge.compras_app.compras_auth.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -21,7 +22,6 @@ public class GitHubService {
     public GitHubService() {
         this.webClient = WebClient.builder().build();
     }
-
     public Mono<Map<String, Object>> getAccessToken(String code) {
         return webClient.post()
                 .uri("https://github.com/login/oauth/access_token")
@@ -32,7 +32,7 @@ public class GitHubService {
                         "code", code
                 ))
                 .retrieve()
-                .bodyToMono(Map.class);
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {});
     }
 
     public Mono<Map<String, Object>> getUserInfo(String accessToken) {
@@ -41,6 +41,6 @@ public class GitHubService {
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Accept", "application/json")
                 .retrieve()
-                .bodyToMono(Map.class);
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {});
     }
 } 
