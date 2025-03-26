@@ -21,10 +21,9 @@ public class GitHubService {
     private final WebClient webClient;
 
     public GitHubService() {
-        this.webClient = WebClient.builder()
-                .baseUrl("https://api.github.com")
-                .build();
+        this.webClient = WebClient.builder().build();
     }
+
     public Mono<Map<String, Object>> getAccessToken(String code) {
         return webClient.post()
                 .uri("https://github.com/login/oauth/access_token")
@@ -40,7 +39,7 @@ public class GitHubService {
 
     public Mono<Map<String, Object>> getUserInfo(String accessToken) {
         return webClient.get()
-                .uri("/user")
+                .uri("https://api.github.com/user")
                 .headers(headers -> headers.setBearerAuth(accessToken))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
@@ -48,7 +47,7 @@ public class GitHubService {
                     // Se o email não estiver no objeto principal, tenta buscar da API de emails
                     if (userInfo.get("email") == null) {
                         return webClient.get()
-                                .uri("/user/emails")
+                                .uri("https://api.github.com/user/emails")
                                 .headers(headers -> headers.setBearerAuth(accessToken))
                                 .retrieve()
                                 .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
