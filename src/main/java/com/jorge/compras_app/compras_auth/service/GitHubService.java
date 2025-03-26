@@ -21,7 +21,9 @@ public class GitHubService {
     private final WebClient webClient;
 
     public GitHubService() {
-        this.webClient = WebClient.builder().build();
+        this.webClient = WebClient.builder()
+                .baseUrl("https://api.github.com")
+                .build();
     }
     public Mono<Map<String, Object>> getAccessToken(String code) {
         return webClient.post()
