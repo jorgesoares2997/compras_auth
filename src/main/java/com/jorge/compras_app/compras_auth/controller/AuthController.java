@@ -172,14 +172,10 @@ public class AuthController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuário não encontrado");
             }
 
-            String name = updates.containsKey("name") ? (String) updates.get("name") : null;
-            int responsibilityLevel = updates.containsKey("responsibilityLevel")
-                    ? (int) updates.get("responsibilityLevel")
-                    : user.getResponsibilityLevel();
             String photoUrl = updates.containsKey("photoUrl") ? (String) updates.get("photoUrl") : null;
 
-            userService.updateUserProfile(email, name, responsibilityLevel, photoUrl);
-            return ResponseEntity.ok("Perfil atualizado com sucesso");
+            userService.updateUserProfile(email, null, photoUrl); // Name é null pra não alterar
+            return ResponseEntity.ok("Foto de perfil atualizada com sucesso");
         } catch (Exception e) {
             System.out.println("Erro ao atualizar perfil: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -209,7 +205,7 @@ public class AuthController {
             Files.write(filePath, photo.getBytes());
 
             String photoUrl = "https://compras-auth.onrender.com/" + UPLOAD_DIR + fileName;
-            userService.updateUserProfile(email, null, user.getResponsibilityLevel(), photoUrl);
+            userService.updateUserProfile(email, null, photoUrl);
 
             Map<String, String> response = new HashMap<>();
             response.put("photoUrl", photoUrl);
