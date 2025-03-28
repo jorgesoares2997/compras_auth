@@ -35,4 +35,10 @@ public class User {
 
     @Column(name = "provider")
     private String provider;
+
+    @Column(name = "responsibility_level", nullable = false)
+    private int responsibilityLevel = 3; // Valor padrão 3
+
+    @Column(name = "photo_url")
+    private String photoUrl; // URL da foto do perfil
 }

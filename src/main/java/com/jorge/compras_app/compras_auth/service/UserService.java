@@ -30,6 +30,7 @@ public class UserService implements UserDetailsService {
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
         user.setCreatedAt(LocalDateTime.now());
+        user.setResponsibilityLevel(3); // Define o valor padrão explicitamente
         return userRepository.save(user);
     }
 
@@ -48,7 +49,9 @@ public class UserService implements UserDetailsService {
         user.setEmail(email);
         user.setName(name);
         user.setPassword(null); // Sem senha para usuários Google
+        user.setProvider("google");
         user.setCreatedAt(LocalDateTime.now());
+        user.setResponsibilityLevel(3); // Valor padrão
         System.out.println("Registrando novo usuário Google: " + email);
         return userRepository.save(user);
     }
@@ -65,8 +68,62 @@ public class UserService implements UserDetailsService {
         user.setName("Apple User");
         user.setPassword(null); // Sem senha para usuários Apple
         user.setAppleId(appleId); // Armazena o ID único da Apple
+        user.setProvider("apple");
         user.setCreatedAt(LocalDateTime.now());
+        user.setResponsibilityLevel(3); // Valor padrão
         System.out.println("Registrando novo usuário Apple: " + email);
+        return userRepository.save(user);
+    }
+
+    public User saveGitHubUser(String email, String name) {
+        User existingUser = findByEmail(email);
+        if (existingUser != null) {
+            existingUser.setLastLogin(LocalDateTime.now());
+            return userRepository.save(existingUser);
+        }
+
+        User user = new User();
+        user.setEmail(email);
+        user.setName(name);
+        user.setPassword("github-auth-" + UUID.randomUUID().toString()); // Senha dummy
+        user.setProvider("github");
+        user.setCreatedAt(LocalDateTime.now());
+        user.setResponsibilityLevel(3); // Valor padrão
+        System.out.println("Registrando novo usuário GitHub: " + email);
+        return userRepository.save(user);
+    }
+
+    public User saveLinkedInUser(String email, String name) {
+        User existingUser = findByEmail(email);
+        if (existingUser != null) {
+            existingUser.setLastLogin(LocalDateTime.now());
+            return userRepository.save(existingUser);
+        }
+
+        User user = new User();
+        user.setEmail(email);
+        user.setName(name);
+        user.setPassword("linkedin-auth-" + UUID.randomUUID().toString()); // Senha dummy
+        user.setProvider("linkedin");
+        user.setCreatedAt(LocalDateTime.now());
+        user.setResponsibilityLevel(3); // Valor padrão
+        System.out.println("Registrando novo usuário LinkedIn: " + email);
+        return userRepository.save(user);
+    }
+
+    public User saveSocialUser(String email, String name, String provider) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            user = new User();
+            user.setEmail(email);
+            user.setName(name);
+            user.setPassword(provider + "-auth-" + UUID.randomUUID().toString());
+            user.setProvider(provider);
+            user.setCreatedAt(LocalDateTime.now());
+            user.setResponsibilityLevel(3); // Valor padrão
+            System.out.println("Registrando novo usuário social (" + provider + "): " + email);
+        }
+        user.setLastLogin(LocalDateTime.now());
         return userRepository.save(user);
     }
 
@@ -103,35 +160,19 @@ public class UserService implements UserDetailsService {
         return isValid;
     }
 
-    // UserService.java (exemplo)
-    public User saveLinkedInUser(String email, String name) {
-        User user = new User();
-        user.setEmail(email);
-        user.setName(name);
-        user.setPassword("linkedin-auth-" + UUID.randomUUID().toString()); // Senha dummy
-        return userRepository.save(user);
-    }
-
-    public User saveGitHubUser(String email, String name) {
-        User user = new User();
-        user.setEmail(email);
-        user.setName(name);
-        user.setPassword("github-auth-" + UUID.randomUUID().toString()); // Senha dummy
-        return userRepository.save(user);
-    }
-
-    public User saveSocialUser(String email, String name, String provider) {
-        User user = userRepository.findByEmail(email).orElse(null);
+    // Novo método pra atualizar o perfil
+    public User updateUserProfile(String email, String name, int responsibilityLevel, String photoUrl) {
+        User user = findByEmail(email);
         if (user == null) {
-            user = new User();
-            user.setEmail(email);
-            user.setName(name);
-            user.setPassword(provider + "-auth-" + UUID.randomUUID().toString());
-            user.setProvider(provider);
-            user.setLastLogin(LocalDateTime.now());
-            return userRepository.save(user);
+            throw new IllegalArgumentException("Usuário não encontrado: " + email);
         }
-        user.setLastLogin(LocalDateTime.now());
+        if (name != null) {
+            user.setName(name);
+        }
+        user.setResponsibilityLevel(responsibilityLevel); // Sempre atualiza
+        if (photoUrl != null) {
+            user.setPhotoUrl(photoUrl);
+        }
         return userRepository.save(user);
     }
 }

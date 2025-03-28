@@ -11,10 +11,17 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import com.jorge.compras_app.compras_auth.config.JwtUtil;
 import com.jorge.compras_app.compras_auth.model.User;
 import com.jorge.compras_app.compras_auth.service.UserService;
 import com.jorge.compras_app.compras_auth.service.GitHubService;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -29,6 +36,9 @@ public class AuthController {
 
     @Autowired
     private GitHubService githubService;
+
+    // Diretório pra salvar as fotos (ajuste conforme necessário)
+    private static final String UPLOAD_DIR = "uploads/";
 
     @GetMapping("/{provider}/login")
     public ResponseEntity<Void> redirectToProvider(@PathVariable String provider,
@@ -56,7 +66,6 @@ public class AuthController {
     @GetMapping("/github/login")
     public ResponseEntity<?> githubLogin(@RequestParam String code) {
         try {
-            // Troca o código pelo token de acesso
             Map<String, Object> tokenResponse = githubService.getAccessToken(code).block();
             if (tokenResponse == null || !tokenResponse.containsKey("access_token")) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -64,8 +73,6 @@ public class AuthController {
             }
 
             String accessToken = (String) tokenResponse.get("access_token");
-
-            // Obtém as informações do usuário
             Map<String, Object> userInfo = githubService.getUserInfo(accessToken).block();
             if (userInfo == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -112,7 +119,7 @@ public class AuthController {
     private ResponseEntity<Void> processCallback(OAuth2AuthorizedClient authorizedClient, String provider,
             String state) {
         String email = authorizedClient.getPrincipalName();
-        String name = (String) authorizedClient.getAccessToken().getTokenValue(); // Simplificado
+        String name = (String) authorizedClient.getAccessToken().getTokenValue();
         User user = userService.findByEmail(email);
         if (user == null) {
             user = userService.saveSocialUser(email, name, provider);
@@ -121,12 +128,96 @@ public class AuthController {
         String token = jwtUtil.generateToken(email);
         System.out.println("Token gerado para " + provider + " login: " + token);
 
-        // Redireciona para o app Flutter com o token
         String redirectUrl = "comprasapp://oauth/callback?token=" + token;
         return ResponseEntity.status(HttpStatus.FOUND).header("Location", redirectUrl).build();
     }
 
     private String encodeState(String name, String email, String message) {
         return Base64.getUrlEncoder().encodeToString((name + "|" + email + "|" + message).getBytes());
+    }
+
+    // Pegar dados do perfil
+    @GetMapping("/profile")
+    public ResponseEntity<Map<String, Object>> getProfile(@RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.replace("Bearer ", "");
+            String email = jwtUtil.extractEmail(token);
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+            }
+
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("name", user.getName());
+            profile.put("email", user.getEmail());
+            profile.put("responsibilityLevel", user.getResponsibilityLevel());
+            profile.put("photoUrl", user.getPhotoUrl());
+            return ResponseEntity.ok(profile);
+        } catch (Exception e) {
+            System.out.println("Erro ao obter perfil: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erro ao obter perfil: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<String> updateProfile(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody Map<String, Object> updates) {
+        try {
+            String token = authHeader.replace("Bearer ", "");
+            String email = jwtUtil.extractEmail(token);
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuário não encontrado");
+            }
+
+            String name = updates.containsKey("name") ? (String) updates.get("name") : null;
+            int responsibilityLevel = updates.containsKey("responsibilityLevel")
+                    ? (int) updates.get("responsibilityLevel")
+                    : user.getResponsibilityLevel();
+            String photoUrl = updates.containsKey("photoUrl") ? (String) updates.get("photoUrl") : null;
+
+            userService.updateUserProfile(email, name, responsibilityLevel, photoUrl);
+            return ResponseEntity.ok("Perfil atualizado com sucesso");
+        } catch (Exception e) {
+            System.out.println("Erro ao atualizar perfil: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao atualizar perfil: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/profile/photo")
+    public ResponseEntity<Map<String, String>> uploadProfilePhoto(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam("photo") MultipartFile photo) {
+        try {
+            String token = authHeader.replace("Bearer ", "");
+            String email = jwtUtil.extractEmail(token);
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+            }
+
+            File uploadDir = new File(UPLOAD_DIR);
+            if (!uploadDir.exists()) {
+                uploadDir.mkdirs();
+            }
+
+            String fileName = email.replace("@", "_") + "_" + System.currentTimeMillis() + ".jpg";
+            Path filePath = Paths.get(UPLOAD_DIR + fileName);
+            Files.write(filePath, photo.getBytes());
+
+            String photoUrl = "https://compras-auth.onrender.com/" + UPLOAD_DIR + fileName;
+            userService.updateUserProfile(email, null, user.getResponsibilityLevel(), photoUrl);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("photoUrl", photoUrl);
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            System.out.println("Erro ao fazer upload da foto: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erro ao fazer upload da foto: " + e.getMessage()));
+        }
     }
 }
