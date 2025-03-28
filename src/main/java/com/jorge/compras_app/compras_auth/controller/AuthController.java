@@ -25,7 +25,7 @@ import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = { "http://localhost:3000" }, allowCredentials = "true")
+@CrossOrigin(origins = "*", allowCredentials = "true")
 public class AuthController {
 
     @Autowired
@@ -189,10 +189,16 @@ public class AuthController {
             @RequestParam("photo") MultipartFile photo) {
         try {
             String token = authHeader.replace("Bearer ", "");
+            System.out.println("Token recebido: " + token);
+            if (!jwtUtil.validateToken(token)) {
+                System.out.println("Token inválido");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Token inválido"));
+            }
             String email = jwtUtil.extractEmail(token);
+            System.out.println("Email extraído: " + email);
             User user = userService.findByEmail(email);
             if (user == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Usuário não encontrado"));
             }
 
             File uploadDir = new File(UPLOAD_DIR);
