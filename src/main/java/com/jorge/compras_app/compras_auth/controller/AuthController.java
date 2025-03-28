@@ -25,7 +25,7 @@ import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*", allowCredentials = "true")
+@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
